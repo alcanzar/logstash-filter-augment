@@ -70,6 +70,9 @@ class LogStash::Filters::Augment < LogStash::Filters::Base
   # if the json file provided is an array, this specifies which field of the
   # array of objects is the key value
   config :json_key, :validate => :string
+  # if json_remove_key is set and your json file is an array, it will remove the
+  # key field from object similar to csv_remove_key
+  config :json_remove_key, :validate => :boolean, :default => true
   # augment_fields is the he list of fields of the dictionary's value to augment
   # on to the event.  If this is not set, then all set fields of the dictionary
   # object are set on the event
@@ -89,6 +92,11 @@ class LogStash::Filters::Augment < LogStash::Filters::Base
   config :augment_default, :validate => :hash
   # refresh_interval specifies minimum time between file refreshes in seconds
   config :refresh_interval, :validate => :number, :default=>300
+  # ignore_fields are the fields of the dictionary value that you want to ignore
+  config :ignore_fields, :validate => :array
+  # only_fields are the only fields of the dictionary value that you want to use
+  config :only_fields, :validate => :array
+
 
   public
   def register
@@ -123,6 +131,11 @@ class LogStash::Filters::Augment < LogStash::Filters::Base
      lock_for_write { load_dictionary(raise_exception) }
     end
 
+    @exclude_keys = Hash.new
+    if @ignore_fields
+      @ignore_fields.each { |k| @exclude_keys[k]=true }
+    end
+
     # validate the dictionary is in the right format
     if @dictionary
       newdic = Hash.new
@@ -142,7 +155,6 @@ class LogStash::Filters::Augment < LogStash::Filters::Base
       end
       @dictionary = newdic
     end
-
 
     @logger.debug? and @logger.debug("#{self.class.name}: Dictionary - ", :dictionary => @dictionary)
   end # def register
@@ -190,8 +202,10 @@ class LogStash::Filters::Augment < LogStash::Filters::Base
       end
       return unless row # nothing to do if there's nothing to add
 
-      row.each do |k,v|
-        event.set(@augment_target+"["+k+"]",v)
+      if @only_fields
+        only_fields.each { |k| event.set(@augment_target+"["+k+"]",row[v]) if row[v] }
+      else
+        row.each { |k,v| event.set(@augment_target+"["+k+"]",v) unless @exclude_keys[k] }
       end
       filter_matched(event)
     rescue Exception => e
@@ -235,7 +249,34 @@ private
       @logger.warn("dictionary file read failure, continuing with old dictionary", :path => @dictionary_path)
       return
     end
-    merge_dictionary!(JSON.parse(File.read(@dictionary_path)), raise_exception)
+    json = JSON.parse(File.read(@dictionary_path))
+    if json.is_a?(Array)
+      if !@json_key
+        raise LogStash::ConfigurationError, I18n.t(
+          "logstash.agent.configuration.invalid_plugin_register",
+          :plugin => "augment",
+          :type => "filter",
+          :error => "The #{@dictionary_path} file is an array, but json_key is not set"
+        )
+      end
+      newjson = Hash.new
+      json.each do |v|
+        newjson[v[@json_key].to_s] = v
+        if @json_remove_key
+          v.delete(@json_key)
+        end
+      end
+      json = newjson
+    end
+
+    # remove any values that aren't hashes
+    json.delete_if do |k,v|
+      if !v.is_a?(Hash)
+        @logger.info("dictionary key #{k} is not a Hash its a "+v.class.to_s)
+        true
+      end
+    end
+    merge_dictionary!(json, raise_exception)
   end
 
   def load_csv(raise_exception=false)

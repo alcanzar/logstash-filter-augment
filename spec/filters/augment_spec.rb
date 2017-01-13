@@ -101,4 +101,81 @@ describe LogStash::Filters::Augment do
       insist { subject.get("message")} == "ok"
     end
   end
+  describe "simple csv file with ignore_fields set" do
+    filename = File.join(File.dirname(__FILE__), "..", "fixtures", "test-with-headers.csv")
+    config <<-CONFIG
+    filter {
+      augment {
+        field => "status"
+        dictionary_path => '#{filename}'
+        ignore_fields => ["color"]
+      }
+    }
+    CONFIG
+    sample("status" => "200") do
+      insist { subject.get("color")} == nil
+      insist { subject.get("message")} == "ok"
+    end
+  end
+  describe "json-hash" do
+    filename = File.join(File.dirname(__FILE__), "..", "fixtures", "json-hash.json")
+    config <<-CONFIG
+    filter {
+      augment {
+        field => "status"
+        dictionary_path => '#{filename}'
+      }
+    }
+    CONFIG
+    sample("status" => "200") do
+      insist { subject.get("color")} == "green"
+      insist { subject.get("message")} == "ok"
+    end
+  end
+  describe "json-array no json_key" do
+    filename = File.join(File.dirname(__FILE__), "..", "fixtures", "json-array.json")
+    config <<-CONFIG
+    filter {
+      augment {
+        field => "status"
+        dictionary_path => '#{filename}'
+      }
+    }
+    CONFIG
+    sample("status" => "404") do
+      expect { subject }.to raise_exception RuntimeError
+    end
+  end
+  describe "json-array with json_key" do
+    filename = File.join(File.dirname(__FILE__), "..", "fixtures", "json-array.json")
+    config <<-CONFIG
+    filter {
+      augment {
+        field => "status"
+        dictionary_path => '#{filename}'
+        json_key => "code"
+      }
+    }
+    CONFIG
+    sample("status" => "404") do
+      insist { subject.get("color")} == "red"
+      insist { subject.get("message")} == "not found"
+    end
+  end
+  describe "json-array with integer key" do
+    filename = File.join(File.dirname(__FILE__), "..", "fixtures", "json-array-int-key.json")
+    config <<-CONFIG
+    filter {
+      augment {
+        field => "status"
+        dictionary_path => '#{filename}'
+        json_key => "code"
+      }
+    }
+    CONFIG
+    sample("status" => "404") do
+      insist { subject.get("color")} == "red"
+      insist { subject.get("message")} == "not found"
+    end
+  end
 end

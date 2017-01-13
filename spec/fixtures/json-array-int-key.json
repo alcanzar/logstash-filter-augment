@@ -1,0 +1,4 @@
+[
+  {"code": 200, "color": "green", "message": "ok"},
+  {"code": 404, "color": "red", "message": "not found"}
+]
