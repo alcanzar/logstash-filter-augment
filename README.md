@@ -9,8 +9,7 @@ It can be used to augment events in logstash from config, CSV file, JSON file, o
 ## Documentation
 
 The logstash-filter-augment plugin can be configured statically like this:
-[code,ruby]
-----------------
+```ruby
 filter {
   augment {
     field => "status"
@@ -30,7 +29,7 @@ filter {
       }
   }
 }
-----------------
+```
 And then when an event with status=200 in, it will add color=green and message=OK to the event
 
 Additionally you use a CSV, YAML, or JSON file to define the mapping.
