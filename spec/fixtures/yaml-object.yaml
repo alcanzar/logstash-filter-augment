@@ -1,0 +1,6 @@
+200:
+  color: green
+  message: ok
+404:
+  color: red
+  message: not found

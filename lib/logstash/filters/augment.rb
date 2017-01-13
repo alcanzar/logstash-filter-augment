@@ -73,6 +73,12 @@ class LogStash::Filters::Augment < LogStash::Filters::Base
   # if json_remove_key is set and your json file is an array, it will remove the
   # key field from object similar to csv_remove_key
   config :json_remove_key, :validate => :boolean, :default => true
+  # if the yaml file provided is an array, this specifies which field of the
+  # array of objects is the key value
+  config :yaml_key, :validate => :string
+  # if yaml_remove_key is set and your json file is an array, it will remove the
+  # key field from object similar to csv_remove_key
+  config :yaml_remove_key, :validate => :boolean, :default => true
   # augment_fields is the he list of fields of the dictionary's value to augment
   # on to the event.  If this is not set, then all set fields of the dictionary
   # object are set on the event
@@ -205,7 +211,7 @@ class LogStash::Filters::Augment < LogStash::Filters::Base
 
 private
   def load_dictionary(filename, raise_exception=false)
-    if !File.exists?(@dictionary_path)
+    if !File.exists?(filename)
       if raise_exception
         raise "Dictionary #{filename} does not exist"
       else
@@ -226,38 +232,41 @@ private
     loading_exception(e, raise_exception)
   end
 
-  def load_yaml(filename, raise_exception=false)
-    merge_dictionary!(YAML.load_file(@dictionary_path))
-  end
-
-  def load_json(filename, raise_exception=false)
-    json = JSON.parse(File.read(filename))
-    if json.is_a?(Array)
-      if !@json_key
+  def cleanup_data(filename, tree, key_if_array, key_type, remove_key)
+    if tree.is_a?(Array)
+      if !key_if_array
         raise LogStash::ConfigurationError, I18n.t(
           "logstash.agent.configuration.invalid_plugin_register",
           :plugin => "augment",
           :type => "filter",
-          :error => "The #{@dictionary_path} file is an array, but json_key is not set"
+          :error => "The #{filename} file is an array, but #{key_type}_key is not set"
         )
       end
-      newjson = Hash.new
-      json.each do |v|
-        newjson[v[@json_key].to_s] = v
-        if @json_remove_key
-          v.delete(@json_key)
+      newTree = Hash.new
+      tree.each do |v|
+        newTree[v[key_if_array].to_s] = v
+        if remove_key
+          v.delete(key_if_array)
         end
       end
-      json = newjson
+      tree = newTree
     end
+    newTree = Hash.new
+    tree.each { |k,v| newTree[k.to_s] = v if (v.is_a?(Object))}
+    tree = newTree
+    puts "#{filename} = #{tree.inspect}"
+    return tree
+  end
 
-    # remove any values that aren't hashes
-    json.delete_if do |k,v|
-      if !v.is_a?(Hash)
-        @logger.info("dictionary key #{k} is not a Hash its a "+v.class.to_s)
-        true
-      end
-    end
+  def load_yaml(filename, raise_exception=false)
+    yaml = YAML.load_file(filename)
+    yaml = cleanup_data(filename, yaml, @yaml_key, 'yaml', @yaml_remove_key)
+    merge_dictionary!(yaml)
+  end
+
+  def load_json(filename, raise_exception=false)
+    json = JSON.parse(File.read(filename))
+    json = cleanup_data(filename, json, @json_key, 'json', @json_remove_key)
     merge_dictionary!(json)
   end
 

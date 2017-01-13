@@ -162,14 +162,29 @@ describe LogStash::Filters::Augment do
       insist { subject.get("message")} == "not found"
     end
   end
-  describe "json-array with integer key" do
-    filename = File.join(File.dirname(__FILE__), "..", "fixtures", "json-array-int-key.json")
+  describe "yaml-array with integer key" do
+    filename = File.join(File.dirname(__FILE__), "..", "fixtures", "yaml-array.yaml")
     config <<-CONFIG
     filter {
       augment {
         field => "status"
         dictionary_path => '#{filename}'
-        json_key => "code"
+        yaml_key => "code"
+      }
+    }
+    CONFIG
+    sample("status" => "404") do
+      insist { subject.get("color")} == "red"
+      insist { subject.get("message")} == "not found"
+    end
+  end
+  describe "yaml-object" do
+    filename = File.join(File.dirname(__FILE__), "..", "fixtures", "yaml-object.yaml")
+    config <<-CONFIG
+    filter {
+      augment {
+        field => "status"
+        dictionary_path => '#{filename}'
       }
     }
     CONFIG
