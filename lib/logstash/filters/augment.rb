@@ -91,7 +91,8 @@ class LogStash::Filters::Augment < LogStash::Filters::Base
   # ----------------
   config :augment_default, :validate => :hash
   # refresh_interval specifies minimum time between file refreshes in seconds
-  config :refresh_interval, :validate => :number, :default=>300
+  # this plugin looks at the modification time of the file and only reloads if that changes
+  config :refresh_interval, :validate => :number, :default=>60
   # ignore_fields are the fields of the dictionary value that you want to ignore
   config :ignore_fields, :validate => :array
   # only_fields are the only fields of the dictionary value that you want to use
@@ -100,12 +101,14 @@ class LogStash::Filters::Augment < LogStash::Filters::Base
 
   public
   def register
+    @fileModifiedTime = Hash.new
     rw_lock = java.util.concurrent.locks.ReentrantReadWriteLock.new
     @read_lock = rw_lock.readLock
     @write_lock = rw_lock.writeLock
     if !@dictionary
       @dictionary = Hash.new
     end
+    @dictionaries = @dictionary_path.nil? ? nil : (@dictionary_path.is_a?(Array) ? @dictionary_path : [ @dictionary_path ])
 
     if @dictionary_path && !@dictionary.empty?
       raise LogStash::ConfigurationError, I18n.t(
@@ -125,11 +128,7 @@ class LogStash::Filters::Augment < LogStash::Filters::Base
       )
     end
 
-    if @dictionary_path
-      @next_refresh = Time.now + @refresh_interval
-      raise_exception = true
-     lock_for_write { load_dictionary(raise_exception) }
-    end
+    load_or_refresh_dictionaries(true)
 
     @exclude_keys = Hash.new
     if @ignore_fields
@@ -179,17 +178,7 @@ class LogStash::Filters::Augment < LogStash::Filters::Base
 
   public
   def filter(event)
-    if @dictionary_path
-      if needs_refresh?
-        lock_for_write do
-          if needs_refresh?
-            load_dictionary
-            @next_refresh = Time.now + @refresh_interval
-            @logger.info("refreshing dictionary file")
-          end
-        end
-      end
-    end
+    load_or_refresh_dictionaries(false)
 
     return unless event.include?(@field) # Skip translation in case event does not have @event field.
 
@@ -215,41 +204,34 @@ class LogStash::Filters::Augment < LogStash::Filters::Base
 
 
 private
-  def load_dictionary(raise_exception=false)
-    if @dictionary_type == 'yaml' || @dictionary_type == 'yml' || (@dictionary_type == 'auto' && /.y[a]?ml$/.match(@dictionary_path))
-      @dictionary_type = 'yaml'
-      load_yaml(raise_exception)
-    elsif @dictionary_type == 'json' || (@dictionary_type == 'auto' && @dictionary_path.end_with?(".json"))
-      @dictionary_type = 'json'
-      load_json(raise_exception)
-    elsif @dictionary_type == 'csv' || (@dictionary_type == 'auto' && @dictionary_path.end_with?(".csv"))
-      @dictionary_type = 'csv'
-      load_csv(raise_exception)
-    else
-      raise "#{self.class.name}: Dictionary #{@dictionary_path} have a non valid format"
+  def load_dictionary(filename, raise_exception=false)
+    if !File.exists?(@dictionary_path)
+      if raise_exception
+        raise "Dictionary #{filename} does not exist"
+      else
+        @logger.warn("Dictionary #{filename} does not exist")
+        return
+      end
     end
-    if raise_exception && !File.exists?(@dictionary_path)
-      @logger.warn("dictionary file read failure, continuing with old dictionary", :path => @dictionary_path)
-      return
+    if @dictionary_type == 'yaml' || @dictionary_type == 'yml' || (@dictionary_type == 'auto' && /.y[a]?ml$/.match(filename))
+      load_yaml(filename,raise_exception)
+    elsif @dictionary_type == 'json' || (@dictionary_type == 'auto' && filename.end_with?(".json"))
+      load_json(filename,raise_exception)
+    elsif @dictionary_type == 'csv' || (@dictionary_type == 'auto' && filename.end_with?(".csv"))
+      load_csv(filename,raise_exception)
+    else
+      raise "#{self.class.name}: Dictionary #{filename} format not recognized from filename or dictionary_type"
     end
   rescue => e
     loading_exception(e, raise_exception)
   end
 
-  def load_yaml(raise_exception=false)
-    if !File.exists?(@dictionary_path)
-      @logger.warn("dictionary file read failure, continuing with old dictionary", :path => @dictionary_path)
-      return
-    end
-    merge_dictionary!(YAML.load_file(@dictionary_path), raise_exception)
+  def load_yaml(filename, raise_exception=false)
+    merge_dictionary!(YAML.load_file(@dictionary_path))
   end
 
-  def load_json(raise_exception=false)
-    if !File.exists?(@dictionary_path)
-      @logger.warn("dictionary file read failure, continuing with old dictionary", :path => @dictionary_path)
-      return
-    end
-    json = JSON.parse(File.read(@dictionary_path))
+  def load_json(filename, raise_exception=false)
+    json = JSON.parse(File.read(filename))
     if json.is_a?(Array)
       if !@json_key
         raise LogStash::ConfigurationError, I18n.t(
@@ -276,10 +258,10 @@ private
         true
       end
     end
-    merge_dictionary!(json, raise_exception)
+    merge_dictionary!(json)
   end
 
-  def load_csv(raise_exception=false)
+  def load_csv(filename, raise_exception=false)
     if raise_exception
       if @csv_first_line == 'auto'
         if @csv_header
@@ -305,11 +287,7 @@ private
         )
       end
     end
-    if !File.exists?(@dictionary_path)
-      @logger.warn("dictionary file read failure, continuing with old dictionary", :path => @dictionary_path)
-      return
-    end
-    csv_lines = CSV.read(@dictionary_path);
+    csv_lines = CSV.read(filename);
     if @csv_first_line == 'header'
       @csv_header = csv_lines.shift
     elsif @csv_first_line == 'ignore'
@@ -330,24 +308,48 @@ private
       end
       data[key] = o
     end
-    merge_dictionary!(data, raise_exception)
+    merge_dictionary!(data)
   end
 
-  def merge_dictionary!(data, raise_exception=false)
+  def merge_dictionary!(data)
     @dictionary.merge!(data)
   end
 
   def loading_exception(e, raise_exception=false)
-    msg = "#{self.class.name}: #{e.message} when loading dictionary file at #{@dictionary_path}"
+    msg = "#{self.class.name}: #{e.message} when loading dictionary file"
     if raise_exception
       raise RuntimeError.new(msg)
     else
-      @logger.warn("#{msg}, continuing with old dictionary", :dictionary_path => @dictionary_path)
+      @logger.warn("#{msg}, continuing with old dictionary")
     end
   end
 
-  def needs_refresh?
-    @next_refresh < Time.now
+  def refresh_dictionary(filename, raise_exception)
+    mtime = File.mtime(filename)
+    if ! @dictionary_mtime[filename] && @dictionary_mtime[filename] != mtime
+      @dictionary_mtime[filename] = mtime
+      @logger.info("file #{filename} has been modified, reloading")
+      load_dictionary(filename, raise_exception)
+    end
   end
 
+  def load_or_refresh_dictionaries(raise_exception=false)
+    if ! @dictionaries
+      return
+    end
+    if (@next_refresh && @next_refresh + @refresh_interval < Time.now)
+      return
+    end
+    lock_for_write do
+      if ! @dictionary_mtime
+        @dictionary_mtime = Hash.new
+      end
+      if (@next_refresh && @next_refresh + @refresh_interval < Time.now)
+        return
+      end
+      @logger.info("checking for modified dictionary files")
+      @dictionaries.each { |filename| refresh_dictionary(filename,raise_exception) }
+      @next_refresh = Time.now + @refresh_interval
+    end
+  end
 end # class LogStash::Filters::Augment
