@@ -104,9 +104,6 @@ class LogStash::Filters::Augment < LogStash::Filters::Base
   config :refresh_interval, :validate => :number, :default=>60
   # ignore_fields are the fields of the dictionary value that you want to ignore
   config :ignore_fields, :validate => :array
-  # only_fields are the only fields of the dictionary value that you want to use
-  config :only_fields, :validate => :array
-
 
   public
   def register
@@ -167,24 +164,6 @@ class LogStash::Filters::Augment < LogStash::Filters::Base
     @logger.debug? and @logger.debug("#{self.class.name}: Dictionary - ", :dictionary => @dictionary)
   end # def register
 
-  def lock_for_read
-    @read_lock.lock
-    begin
-      yield
-    ensure
-
-    end
-  end
-
-  def lock_for_write
-    @write_lock.lock
-    begin
-      yield
-    ensure
-      @write_lock.unlock
-    end
-  end
-
   public
   def filter(event)
     load_or_refresh_dictionaries(false)
@@ -213,6 +192,23 @@ class LogStash::Filters::Augment < LogStash::Filters::Base
 
 
 private
+  def lock_for_read
+    @read_lock.lock
+    begin
+      yield
+    ensure
+
+    end
+  end
+
+  def lock_for_write
+    @write_lock.lock
+    begin
+      yield
+    ensure
+      @write_lock.unlock
+    end
+  end
   def load_dictionary(filename, raise_exception=false)
     if !File.exists?(filename)
       if raise_exception
