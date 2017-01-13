@@ -7,6 +7,8 @@ require "csv"
 # This filter will allow you to augment events in logstash from
 # an external file source
 class LogStash::Filters::Augment < LogStash::Filters::Base
+  # [source,ruby]
+  # ----------------
   # filter {
   #   augment {
   #     field => "status"
@@ -26,13 +28,14 @@ class LogStash::Filters::Augment < LogStash::Filters::Base
   #       }
   #   }
   # }
+  # ----------------
   config_name "augment"
 
   # the field to look up in the dictionary
   config :field, :validate => :string, :required => true
   # dictionary_path specifies the file to load from.  This can be a .csv, yaml,
   # or json file
-  config :dictionary_path, :validate => :string
+  config :dictionary_path, :validate => :array
   # specifies the file type (json/yaml/csv/auto are valid values)
   config :dictionary_type, :validate => ['auto', 'csv', 'json', 'yaml', 'yml'], :default=>'auto'
   # if specified this should be a hash of objects like this:
@@ -254,7 +257,6 @@ private
     newTree = Hash.new
     tree.each { |k,v| newTree[k.to_s] = v if (v.is_a?(Object))}
     tree = newTree
-    puts "#{filename} = #{tree.inspect}"
     return tree
   end
 
