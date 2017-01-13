@@ -2,11 +2,11 @@ Gem::Specification.new do |s|
   s.name          = 'logstash-filter-augment'
   s.version       = '0.1.0'
   s.licenses      = ['Apache License (2.0)']
-  s.summary       = 'TODO: Write a short summary, because Rubygems requires one.'
-  s.description   = 'TODO: Write a longer description or delete this line.'
-  s.homepage      = 'TODO: Put your plugin''s website or public repo URL here.'
+  s.summary       = 'A logstash plugin to augment your events from data in files'
+  s.description   = 'A logstash plugin that can merge data from CSV, YAML, and JSON files with events.'
+  s.homepage      = 'https://github.com/alcanzar/logstash-filter-augment/'
   s.authors       = ['Adam Caldwell']
-  s.email         = 'acaldwell@languageline.com'
+  s.email         = 'alcanzar@gmail.com'
   s.require_paths = ['lib']
 
   # Files
