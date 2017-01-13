@@ -4,13 +4,36 @@ This is a plugin for [Logstash](https://github.com/elastic/logstash).
 
 It is fully free and fully open source. The license is Apache 2.0, meaning you are pretty much free to use it however you want in whatever way.
 
-It can be used to augment events in logstash from a variety of sources.
+It can be used to augment events in logstash from config, CSV file, JSON file, or yaml files.  This differs from the translate plugin in that it can add multiple fields to the event based on one lookup.  For example say you have a geocode file that maps store numbers to coordinates.  Using this plugin you can add a location.latitude and location.longitude to your event based on a simple lookup.
+
 ## Documentation
 
-Logstash provides infrastructure to automatically generate documentation for this plugin. We use the asciidoc format to write documentation so any comments in the source code will be first converted into asciidoc and then into html. All plugin documentation are placed under one [central location](http://www.elastic.co/guide/en/logstash/current/).
+The logstash-filter-augment plugin can be configured statically like this:
+[code,ruby]
+----------------
+filter {
+  augment {
+    field => "status"
+    dictionary => {
+        "200" => {
+          "color" => "green"
+          "message" => "OK"
+        }
+        "404" => {
+          "color" => "red"
+          "message" => "Missing"
+        }
+      }
+      augment_default => {
+        "color" => "orange"
+        "message" => "not found"
+      }
+  }
+}
+----------------
+And then when an event with status=200 in, it will add color=green and message=OK to the event
 
-- For formatting code or config example, you can use the asciidoc `[source,ruby]` directive
-- For more asciidoc formatting tips, see the excellent reference here https://github.com/elastic/docs#asciidoc-guide
+Additionally you use a CSV, YAML, or JSON file to define the mapping.
 
 ## Developing
 
@@ -18,8 +41,6 @@ Logstash provides infrastructure to automatically generate documentation for thi
 
 #### Code
 - To get started, you'll need JRuby with the Bundler gem installed.
-
-- Create a new plugin or clone and existing from the GitHub [logstash-plugins](https://github.com/logstash-plugins) organization. We also provide [example plugins](https://github.com/logstash-plugins?query=example).
 
 - Install dependencies
 ```sh
@@ -46,7 +67,7 @@ bundle exec rspec
 
 - Edit Logstash `Gemfile` and add the local plugin path, for example:
 ```ruby
-gem "logstash-filter-awesome", :path => "/your/local/logstash-filter-awesome"
+gem "logstash-filter-augment", :path => "/your/local/logstash-filter-augment"
 ```
 - Install plugin
 ```sh
@@ -54,7 +75,7 @@ bin/logstash-plugin install --no-verify
 ```
 - Run Logstash with your plugin
 ```sh
-bin/logstash -e 'filter {awesome {}}'
+bin/logstash -e 'filter {augment {}}'
 ```
 At this point any modifications to the plugin code will be applied to this local Logstash setup. After modifying the plugin, simply rerun Logstash.
 
@@ -64,11 +85,11 @@ You can use the same **2.1** method to run your plugin in an installed Logstash 
 
 - Build your plugin gem
 ```sh
-gem build logstash-filter-awesome.gemspec
+gem build logstash-filter-augment.gemspec
 ```
 - Install the plugin from the Logstash home
 ```sh
-bin/logstash-plugin install /your/local/plugin/logstash-filter-awesome.gem
+bin/logstash-plugin install /your/local/plugin/logstash-filter-augment.gem
 ```
 - Start Logstash and proceed to test the plugin
 

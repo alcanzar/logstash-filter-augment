@@ -7,15 +7,25 @@ require "csv"
 # This filter will allow you to augment events in logstash from
 # an external file source
 class LogStash::Filters::Augment < LogStash::Filters::Base
-  # Setting the config_name here is required. This is how you
-  # configure this filter from your Logstash config.
-  #
   # filter {
-  #    {
-  #     message => "My message..."
+  #   augment {
+  #     field => "status"
+  #     dictionary => {
+  #         "200" => {
+  #           "color" => "green"
+  #           "message" => "OK"
+  #         }
+  #         "404" => {
+  #           "color" => "red"
+  #           "message" => "Missing"
+  #         }
+  #       }
+  #       augment_default => {
+  #         "color" => "orange"
+  #         "message" => "not found"
+  #       }
   #   }
   # }
-  #
   config_name "augment"
 
   # the field to look up in the dictionary
@@ -26,16 +36,19 @@ class LogStash::Filters::Augment < LogStash::Filters::Base
   # specifies the file type (json/yaml/csv/auto are valid values)
   config :dictionary_type, :validate => ['auto', 'csv', 'json', 'yaml', 'yml'], :default=>'auto'
   # if specified this should be a hash of objects like this:
+  # [source,ruby]
+  # ----------------
   # dictionary => {
-  #  200 => {
-  #    status => 'ok'
-  #    color => 'green'
-  #  }
-  #  404 => {
-  #    status => 'not found'
-  #    color => 'green'
-  #  }
-  # }
+  #     "200" => {
+  #       "color" => "green"
+  #       "message" => "OK"
+  #     }
+  #     "404" => {
+  #       "color" => "red"
+  #       "message" => "Missing"
+  #     }
+  #   }
+  # ----------------
   config :dictionary, :validate => :hash
   # csv_header is columns of the csv file.
   config :csv_header, :validate => :array
@@ -66,10 +79,13 @@ class LogStash::Filters::Augment < LogStash::Filters::Base
   config :augment_target, :validate => :string, :default=>""
   # augment_default will be used if the key is not found
   # for example:
+  # [source,ruby]
+  # ----------------
   #   augment_default => {
   #     status => 'unknown'
   #     color => 'orange'
   #   }
+  # ----------------
   config :augment_default, :validate => :hash
   # refresh_interval specifies minimum time between file refreshes in seconds
   config :refresh_interval, :validate => :number, :default=>300
