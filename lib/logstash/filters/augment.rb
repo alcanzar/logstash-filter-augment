@@ -22,7 +22,7 @@ class LogStash::Filters::Augment < LogStash::Filters::Base
   #           "message" => "Missing"
   #         }
   #       }
-  #       augment_default => {
+  #       default => {
   #         "color" => "orange"
   #         "message" => "not found"
   #       }
@@ -86,19 +86,19 @@ class LogStash::Filters::Augment < LogStash::Filters::Base
   # on to the event.  If this is not set, then all set fields of the dictionary
   # object are set on the event
   config :augment_fields, :validate => :array
-  # if augment_target is set, the augmented fields will be added to this event
+  # if target is set, the augmented fields will be added to this event
   # field instead of the root event.
-  config :augment_target, :validate => :string, :default=>""
+  config :target, :validate => :string, :default=>""
   # augment_default will be used if the key is not found
   # for example:
   # [source,ruby]
   # ----------------
-  #   augment_default => {
+  #   default => {
   #     status => 'unknown'
   #     color => 'orange'
   #   }
   # ----------------
-  config :augment_default, :validate => :hash
+  config :default, :validate => :hash
   # refresh_interval specifies minimum time between file refreshes in seconds
   # this plugin looks at the modification time of the file and only reloads if that changes
   config :refresh_interval, :validate => :number, :default=>60
@@ -117,21 +117,11 @@ class LogStash::Filters::Augment < LogStash::Filters::Base
     @dictionaries = @dictionary_path.nil? ? nil : (@dictionary_path.is_a?(Array) ? @dictionary_path : [ @dictionary_path ])
 
     if @dictionary_path && !@dictionary.empty?
-      raise LogStash::ConfigurationError, I18n.t(
-        "logstash.agent.configuration.invalid_plugin_register",
-          :plugin => "augment",
-          :type => "filter",
-          :error => "The configuration options 'dictionary' and 'dictionary_path' are mutually exclusive"
-      )
+      raise LogStash::ConfigurationError, "The configuration options 'dictionary' and 'dictionary_path' are mutually exclusive"
     end
 
     if @csv_ignore_first_line && !@csv_header
-      raise LogStash::ConfigurationError, I18n.t(
-        "logstash.agent.configuration.invalid_plugin_register",
-          :plugin => "augment",
-          :type => "filter",
-          :error => "The parameter csv_header is required if csv_ignore_first_line = true"
-      )
+      raise LogStash::ConfigurationError, "The parameter csv_header is required if csv_ignore_first_line = true"
     end
 
     load_or_refresh_dictionaries(true)
@@ -150,12 +140,7 @@ class LogStash::Filters::Augment < LogStash::Filters::Base
         elsif val.is_a?(Hash)
           newdic[key] = val
         else
-          raise LogStash::ConfigurationError, I18n.t(
-            "logstash.agent.configuration.invalid_plugin_register",
-              :plugin => "augment",
-              :type => "filter",
-              :error => "The dictionary must be a hash of string to dictionary.  "+key+" is neither a "+val.class.to_s
-          )
+          raise LogStash::ConfigurationError, "The dictionary must be a hash of string to dictionary.  "+key+" is neither a "+val.class.to_s
         end
       end
       @dictionary = newdic
@@ -175,14 +160,14 @@ class LogStash::Filters::Augment < LogStash::Filters::Base
       source = event.get(@field).is_a?(Array) ? event.get(@field).first.to_s : event.get(@field).to_s
       row = lock_for_read { @dictionary[source] }
       if !row
-        row = @augment_default
+        row = @default
       end
       return unless row # nothing to do if there's nothing to add
 
       if @only_fields
-        only_fields.each { |k| event.set(@augment_target+"["+k+"]",row[v]) if row[v] }
+        only_fields.each { |k| event.set("#{@target}[#{k}]",row[v]) if row[v] }
       else
-        row.each { |k,v| event.set(@augment_target+"["+k+"]",v) unless @exclude_keys[k] }
+        row.each { |k,v| event.set("#{@target}[#{k}]",v) unless @exclude_keys[k] }
       end
       filter_matched(event)
     rescue Exception => e
@@ -197,7 +182,7 @@ private
     begin
       yield
     ensure
-
+    @read_lock.unlock
     end
   end
 
@@ -234,12 +219,7 @@ private
   def cleanup_data(filename, tree, key_if_array, key_type, remove_key)
     if tree.is_a?(Array)
       if !key_if_array
-        raise LogStash::ConfigurationError, I18n.t(
-          "logstash.agent.configuration.invalid_plugin_register",
-          :plugin => "augment",
-          :type => "filter",
-          :error => "The #{filename} file is an array, but #{key_type}_key is not set"
-        )
+        raise LogStash::ConfigurationError, "The #{filename} file is an array, but #{key_type}_key is not set"
       end
       newTree = Hash.new
       tree.each do |v|
@@ -259,17 +239,18 @@ private
   def load_yaml(filename, raise_exception=false)
     yaml = YAML.load_file(filename)
     yaml = cleanup_data(filename, yaml, @yaml_key, 'yaml', @yaml_remove_key)
-    merge_dictionary!(yaml)
+    merge_dictionary!(filename, yaml)
   end
 
   def load_json(filename, raise_exception=false)
     json = JSON.parse(File.read(filename))
     json = cleanup_data(filename, json, @json_key, 'json', @json_remove_key)
-    merge_dictionary!(json)
+    merge_dictionary!(filename, json)
   end
 
   def load_csv(filename, raise_exception=false)
-    if raise_exception
+    if !@initialized
+      @initialized = true
       if @csv_first_line == 'auto'
         if @csv_header
           @csv_first_line = 'data'
@@ -278,20 +259,10 @@ private
         end
       end
       if @csv_first_line == 'header' && @csv_header
-        raise LogStash::ConfigurationError, I18n.t(
-          "logstash.agent.configuration.invalid_plugin_register",
-            :plugin => "augment",
-            :type => "filter",
-            :error => "The csv_first_line is set to 'header' but csv_header is set"
-        )
+        raise LogStash::ConfigurationError, "The csv_first_line is set to 'header' but csv_header is set"
       end
       if @csv_first_line == 'ignore' && !csv_header
-        raise LogStash::ConfigurationError, I18n.t(
-          "logstash.agent.configuration.invalid_plugin_register",
-            :plugin => "augment",
-            :type => "filter",
-            :error => "The csv_first_line is set to 'ignore' but csv_header is not set"
-        )
+        raise LogStash::ConfigurationError, "The csv_first_line is set to 'ignore' but csv_header is not set"
       end
     end
     csv_lines = CSV.read(filename);
@@ -315,10 +286,11 @@ private
       end
       data[key] = o
     end
-    merge_dictionary!(data)
+    merge_dictionary!(filename, data)
   end
 
-  def merge_dictionary!(data)
+  def merge_dictionary!(filename, data)
+    @logger.debug("Merging data from #{filename} = #{data}")
     @dictionary.merge!(data)
   end
 
@@ -351,7 +323,7 @@ private
       if ! @dictionary_mtime
         @dictionary_mtime = Hash.new
       end
-      if (@next_refresh && @next_refresh + @refresh_interval < Time.now)
+      if (@next_refresh && @next_refresh > Time.now)
         return
       end
       @logger.info("checking for modified dictionary files")

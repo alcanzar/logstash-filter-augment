@@ -41,7 +41,7 @@ describe LogStash::Filters::Augment do
               "message" => "Missing"
             }
           }
-          augment_default => {
+          default => {
             "color" => "orange"
             "message" => "not found"
           }

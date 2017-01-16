@@ -23,7 +23,7 @@ filter {
           "message" => "Missing"
         }
       }
-      augment_default => {
+      default => {
         "color" => "orange"
         "message" => "not found"
       }
