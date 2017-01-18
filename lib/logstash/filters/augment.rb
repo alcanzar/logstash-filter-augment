@@ -59,7 +59,7 @@ class LogStash::Filters::Augment < LogStash::Filters::Base
   #  - 'ignore' skips it (csv_header must be set)
   #  - 'header' reads it and populates csv_header with it (csv_header must not be set)
   #  - 'data' reads it as data (csv_header must be set)
-  #  - 'auto' treats the first line as data if csv_header is set or header if csv_data isn't set
+  #  - 'auto' treats the first line as `data` if csv_header is set or `header` if it isn't
   config :csv_first_line, :validate => ["data","header","ignore","auto"], :default=>"auto"
   # the csv_key determines which field of the csv file is the dictionary key
   # if this is not set, it will default to first column of the csv file
@@ -314,6 +314,9 @@ private
 
   def load_or_refresh_dictionaries(raise_exception=false)
     if ! @dictionaries
+      return
+    end
+    if @refresh_interval < 0 && @dictionary_mtime # don't refresh if we aren't supposed to
       return
     end
     if (@next_refresh && @next_refresh + @refresh_interval < Time.now)
