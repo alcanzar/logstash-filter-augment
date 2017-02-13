@@ -70,6 +70,10 @@ class LogStash::Filters::Augment < LogStash::Filters::Base
   # is false then the event will have a status=200.  If csv_remove_key is true, then the event won't have
   # a status unless it already existed in the event.
   config :csv_remove_key, :validate => :boolean, :default => true
+  # the column seperator for a CSV file
+  config :csv_col_sep, :validate => :string, :default => ","
+  # the quote character for a CSV file
+  config :csv_quote_char, :validate => :string, :default => '"'
   # if the json file provided is an array, this specifies which field of the
   # array of objects is the key value
   config :json_key, :validate => :string
@@ -265,7 +269,7 @@ private
         raise LogStash::ConfigurationError, "The csv_first_line is set to 'ignore' but csv_header is not set"
       end
     end
-    csv_lines = CSV.read(filename);
+    csv_lines = CSV.read(filename,{ :col_sep => @csv_col_sep, :quote_char => @csv_quote_char });
     if @csv_first_line == 'header'
       @csv_header = csv_lines.shift
     elsif @csv_first_line == 'ignore'

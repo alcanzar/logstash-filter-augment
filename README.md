@@ -76,6 +76,8 @@ If you choose this route, be careful that you quote your keys or you could end u
 | csv_first_line | No (auto) | indicates what to do with the first line of the file.  Valid values are `ignore`, `header`, `data`, and `auto`.  `auto` treats the first line as data if csv_header is set or `header` if it isn't |
 | csv_key | No | On CSV files, which field name is the key.  Defaults to the first column of the file if not set |
 | csv_remove_key | No(true) | Remove the key from the object.  You might want to set this to false if you don't have a `default` set so that you know which records were matched |
+| csv_col_sep | No(,) | Change the column seperator for CSV files.  If you need to use tabs, you have to embed a real tab in the quotes |
+| csv_quote_char | No(") | Change the quote character for CSV files |
 | json_key | Yes, if array | The field of the json objects to use as a key for the dictionary |
 | json_remove_key | No | Similar to csv_remove_key |
 | yaml_key | Yes, if array | The field of the YAML objects to use as a key for the dictionary |

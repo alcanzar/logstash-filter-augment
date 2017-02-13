@@ -69,6 +69,25 @@ describe LogStash::Filters::Augment do
       expect { subject }.to raise_exception LogStash::ConfigurationError
     end
   end
+  describe "csv file with a options set" do
+    filename = File.join(File.dirname(__FILE__), "..", "fixtures", "test-with-tabs.txt")
+    config <<-CONFIG
+    filter {
+      augment {
+        field => "status"
+        dictionary_path => '#{filename}'
+        dictionary_type => "csv"
+        csv_first_line => "data"
+        csv_header => ["status","color","message"]
+        csv_col_sep => "	"
+      }
+    }
+    CONFIG
+    sample("status" => "200") do
+      insist { subject.get("color")} == "green"
+      insist { subject.get("message")} == "ok"
+    end
+  end
   describe "simple csv file with header ignored" do
     filename = File.join(File.dirname(__FILE__), "..", "fixtures", "test-with-headers.csv")
     config <<-CONFIG
