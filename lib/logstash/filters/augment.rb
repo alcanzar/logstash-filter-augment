@@ -309,7 +309,7 @@ private
 
   def refresh_dictionary(filename, raise_exception)
     mtime = File.mtime(filename)
-    if ! @dictionary_mtime[filename] && @dictionary_mtime[filename] != mtime
+    if ! @dictionary_mtime[filename] || @dictionary_mtime[filename] != mtime
       @dictionary_mtime[filename] = mtime
       @logger.info("file #{filename} has been modified, reloading")
       load_dictionary(filename, raise_exception)
