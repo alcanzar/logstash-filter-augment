@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name          = 'logstash-filter-augment'
-  s.version       = '0.2.0'
+  s.version       = '0.3.0'
   s.licenses      = ['Apache License (2.0)']
   s.summary       = 'A logstash plugin to augment your events from data in files'
   s.description   = 'A logstash plugin that can merge data from CSV, YAML, and JSON files with events.'
