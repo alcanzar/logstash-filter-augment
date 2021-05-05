@@ -323,7 +323,7 @@ private
     if @refresh_interval < 0 && @dictionary_mtime # don't refresh if we aren't supposed to
       return
     end
-    if (@next_refresh && @next_refresh + @refresh_interval < Time.now)
+    if (@next_refresh && @next_refresh > Time.now)
       return
     end
     lock_for_write do
